@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多模態壓力決策模擬器 - 專題展示</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; }
+        h2 { text-align: center; color: #2c3e50; margin-bottom: 5px; font-size: 28px; }
+        p.subtitle { text-align: center; color: #7f8c8d; margin-bottom: 30px; }
+        
+        .controls { display: flex; gap: 20px; margin-bottom: 20px; }
+        .control-group { flex: 1; background: #f8f9fa; padding: 20px; border-radius: 10px; border: 1px solid #e9ecef; }
+        .control-group label { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 15px; color: #34495e; font-size: 16px; }
+        .val-display { color: #3498db; font-size: 20px; }
+        input[type=range] { width: 100%; cursor: pointer; }
+
+        .matrix { position: relative; width: 100%; height: 400px; background: #fafafa; border-radius: 8px; margin-bottom: 25px; box-shadow: inset 0 0 10px rgba(0,0,0,0.05); overflow: hidden; border: 2px solid #bdc3c7;}
+        
+        /* 四個象限的顏色與排版 */
+        .quadrant { position: absolute; display: flex; padding: 20px; font-weight: bold; font-size: 22px; opacity: 0.9; box-sizing: border-box; transition: all 0.3s;}
+        .q-tl { top: 0; left: 0; width: 50%; height: 30%; background: #ffebee; color: #c62828; justify-content: flex-start; align-items: center; border-bottom: 3px dashed #c62828; border-right: 3px dashed #c62828;} 
+        .q-tr { top: 0; left: 50%; width: 50%; height: 30%; background: #fff3e0; color: #e67e22; justify-content: flex-end; align-items: center; border-bottom: 3px dashed #e67e22;} 
+        .q-bl { top: 30%; left: 0; width: 50%; height: 70%; background: #fffde7; color: #f39c12; justify-content: flex-start; align-items: flex-end; border-right: 3px dashed #f39c12;} 
+        .q-br { top: 30%; left: 50%; width: 50%; height: 70%; background: #e8f5e9; color: #27ae60; justify-content: flex-end; align-items: flex-end;} 
+        
+        /* 座標軸文字 */
+        .axis-label-x { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); font-size: 14px; color: #7f8c8d; font-weight: normal; }
+        .axis-label-y { position: absolute; top: 50%; left: -30px; transform: translateY(-50%) rotate(-90deg); font-size: 14px; color: #7f8c8d; font-weight: normal; }
+
+        /* 動態標記點 */
+        .marker { position: absolute; width: 24px; height: 24px; background: #2980b9; border: 4px solid white; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 4px 10px rgba(0,0,0,0.4); transition: top 0.1s, left 0.1s; z-index: 10; }
+        
+        /* 結果輸出區塊 */
+        .result-box { padding: 25px; border-radius: 10px; font-size: 18px; line-height: 1.6; transition: all 0.3s ease; border-left: 8px solid transparent; background: #f8f9fa;}
+        .badge { display: inline-block; padding: 6px 12px; border-radius: 6px; color: white; margin-bottom: 12px; font-weight: bold; font-size: 20px;}
+        .action-text { color: #2c3e50; font-weight: 500; }
+        .reason-text { color: #7f8c8d; font-size: 16px; margin-top: 8px; display: block; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>長照系統：多模態壓力決策矩陣</h2>
+    <p class="subtitle">結合 NLP 文字情感 (Groq) 、 生理壓力 (HRV) 與 睡眠時數 (Google Fit)</p>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>
+                <span>📝 NLP 文字情緒 (X軸)</span>
+                <span id="nlp-val" class="val-display">0.0</span>
+            </label>
+            <input type="range" id="nlp-slider" min="-1.0" max="1.0" step="0.1" value="0.0">
+            <div style="display:flex; justify-content:space-between; font-size:12px; color:#999; margin-top:5px;">
+                <span>-1.0 (極負面)</span><span>0</span><span>1.0 (正向)</span>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label>
+                <span>⌚ 手環生理壓力 (Y軸)</span>
+                <span id="stress-val" class="val-display">50</span>
+            </label>
+            <input type="range" id="stress-slider" min="0" max="100" step="1" value="50">
+            <div style="display:flex; justify-content:space-between; font-size:12px; color:#999; margin-top:5px;">
+                <span>0 (放鬆)</span><span>70 (警戒)</span><span>100 (高壓)</span>
+            </div>
+        </div>
+
+        <div class="control-group" style="background-color: #e8f4fd; border-color: #b9dfff;">
+            <label>
+                <span>🛌 每日睡眠時數 (隱藏變數)</span>
+                <span id="sleep-val" class="val-display" style="color: #2980b9;">7.0 hr</span>
+            </label>
+            <input type="range" id="sleep-slider" min="0" max="12" step="0.5" value="7.0">
+            <div style="display:flex; justify-content:space-between; font-size:12px; color:#999; margin-top:5px;">
+                <span>0 hr</span><span>5 hr (剝奪線)</span><span>12 hr</span>
+            </div>
+        </div>
+    </div>
+
+    <div style="position:relative; margin-left: 30px;">
+        <span class="axis-label-y">生理壓力 (高 ➜ 低)</span>
+        <div class="matrix" id="matrix">
+            <div class="quadrant q-tl">🔴 急性崩潰</div>
+            <div class="quadrant q-tr">🟠 隱性高壓 (偽裝)</div>
+            <div class="quadrant q-bl">🟡 慢性疲勞</div>
+            <div class="quadrant q-br">🟢 狀態平穩</div>
+            <span class="axis-label-x">文字情緒 (負面 ➜ 正向)</span>
+            <div class="marker" id="marker"></div>
+        </div>
+    </div>
+
+    <div class="result-box" id="result-box">
+        <span class="badge" id="badge">系統狀態</span>
+        <div class="action-text" id="action-text">請拖拉上方的滑桿進行測試。</div>
+        <span class="reason-text" id="reason-text"></span>
+    </div>
+</div>
+
+<script>
+    const nlpSlider = document.getElementById('nlp-slider');
+    const stressSlider = document.getElementById('stress-slider');
+    const sleepSlider = document.getElementById('sleep-slider');
+    
+    const nlpVal = document.getElementById('nlp-val');
+    const stressVal = document.getElementById('stress-val');
+    const sleepVal = document.getElementById('sleep-val');
+    const marker = document.getElementById('marker');
+    
+    const resultBox = document.getElementById('result-box');
+    const badge = document.getElementById('badge');
+    const actionText = document.getElementById('action-text');
+    const reasonText = document.getElementById('reason-text');
+
+    function updateMatrix() {
+        const nlp = parseFloat(nlpSlider.value);
+        const stress = parseInt(stressSlider.value);
+        const sleep = parseFloat(sleepSlider.value);
+
+        // 更新數值顯示
+        nlpVal.textContent = nlp.toFixed(1);
+        stressVal.textContent = stress;
+        sleepVal.textContent = sleep.toFixed(1) + ' hr';
+
+        // 計算點的座標 (矩陣僅顯示 X: NLP, Y: 壓力)
+        const posX = ((nlp + 1) / 2) * 100;
+        const posY = 100 - stress;
+        marker.style.left = `${posX}%`;
+        marker.style.top = `${posY}%`;
+
+        // 核心判斷邏輯：加入了睡眠 (Sleep) 變數
+        if (nlp < 0 && stress >= 70 && sleep <= 5) {
+            // 紅色警戒：身心俱疲且嚴重失眠
+            resultBox.style.backgroundColor = '#ffebee';
+            resultBox.style.borderLeftColor = '#c62828';
+            badge.style.backgroundColor = '#c62828';
+            badge.textContent = '🚨 紅色警戒：急性崩潰';
+            actionText.innerHTML = '<b>系統處置：</b> 強制暫停一般功能，滿版彈出 1925 安心專線與在地心理急救按鈕。';
+            reasonText.innerHTML = '<b>觸發原因：</b> 文字極度絕望、生理緊繃，且<b>偵測到嚴重的睡眠剝奪 (小於5小時)</b>，這是情緒失控的最高風險狀態。';
+            
+        } else if (nlp >= 0 && stress >= 70) {
+            // 橘色警戒：偽裝者 (只要生理高壓且文字正向，一律算偽裝)
+            resultBox.style.backgroundColor = '#fff3e0';
+            resultBox.style.borderLeftColor = '#e67e22';
+            badge.style.backgroundColor = '#e67e22';
+            badge.textContent = '👀 橘色警戒：隱性高壓 (強顏歡笑)';
+            actionText.innerHTML = '<b>系統處置：</b> 推播溫暖同理金句：「假裝沒事反而最耗力氣」，並引導進入匿名樹洞發洩。';
+            reasonText.innerHTML = '<b>觸發原因：</b> 文字情緒看似平穩，但生理測得高壓。代表使用者正在壓抑或偽裝，是潛在的高危險群。';
+            
+        } else if (nlp < 0 || sleep < 6) {
+            // 黃色警戒：抱怨疲勞，或是「睡太少」
+            resultBox.style.backgroundColor = '#fffde7';
+            resultBox.style.borderLeftColor = '#f39c12';
+            badge.style.backgroundColor = '#f39c12';
+            badge.textContent = '🔋 黃色警戒：慢性疲勞';
+            actionText.innerHTML = '<b>系統處置：</b> 系統主動推播在地「長照 2.0 喘息服務」申請懶人包。';
+            
+            if (sleep < 6) {
+                reasonText.innerHTML = '<b>觸發原因：</b> 即使當下情緒平穩，但<b>睡眠嚴重不足 (' + sleep + '小時)</b>，長期將演變成憂鬱症或過勞。';
+            } else {
+                reasonText.innerHTML = '<b>觸發原因：</b> 心理呈現負面耗竭，需及早給予社會資源介入防範惡化。';
+            }
+            
+        } else {
+            // 綠色狀態：身心平穩且睡眠充足
+            resultBox.style.backgroundColor = '#e8f5e9';
+            resultBox.style.borderLeftColor = '#27ae60';
+            badge.style.backgroundColor = '#27ae60';
+            badge.textContent = '🌱 綠色狀態：身心平穩';
+            actionText.innerHTML = '<b>系統處置：</b> 鼓勵使用者紀錄今日的「微小正向時刻」，並發放成就徽章。';
+            reasonText.innerHTML = '<b>觸發原因：</b> 情緒與生理數據皆在正常範圍內，且睡眠充足。';
+        }
+    }
+
+    // 監聽滑桿滑動事件
+    nlpSlider.addEventListener('input', updateMatrix);
+    stressSlider.addEventListener('input', updateMatrix);
+    sleepSlider.addEventListener('input', updateMatrix);
+
+    // 初始化畫面
+    updateMatrix();
+</script>
+
+</body>
+</html>
